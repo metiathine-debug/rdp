@@ -1,0 +1,168 @@
+# Google Colab Local Runtime with WSL2 + Docker + GPU (Windows 11 + D Drive)
+
+このREADMEは、Windows 11 環境で、Google Colaboratory からローカルGPU（RTX3060など）を使って処理を実行するための手順をまとめたものです。
+
+---
+
+## 📦 概要
+
+このリポジトリでは、Windows 11 + WSL2 + Docker 環境において、Google Colab のローカルランタイム機能を使い、PC内の GPU を活用する方法を提供します。
+
+### ✅ 特長
+
+- Google Colab の UI でローカル GPU をフル活用
+- WSL2 + Docker + NVIDIA CUDA 対応
+- モデル・キャッシュの永続保存対応
+- Gradio アプリの利用も可能
+
+---
+
+## ⚙️ 前提環境
+
+この手順を進める前に、以下の環境・条件が整っていることを確認：
+
+| 必須項目         | 内容                                |
+| --------------- | ----------------------------------- |
+| OS              | Windows 11                          |
+| GPU             | NVIDIA GPU（例：RTX 3060）           |
+| WSL2            | 有効化済み（`wsl --install` でセットアップ可） |
+| Ubuntu on WSL2  | インストール済み（20.04または22.04を推奨） |
+| NVIDIAドライバ   | CUDA対応のWindows向けGPUドライバがインストール済み |
+| Docker Desktop  | インストール済み。WSL2統合とGPU利用が有効化されていること |
+
+---
+
+## ✅ Step 1：Colab用フォルダ作成
+
+### 📁 フォルダ構成（手動で作成）
+
+エクスプローラーで `D:\colab-runtime` フォルダを作成し、以下の2つの空フォルダを中に作成：
+
+```
+D:\colab-runtime\
+├── content       ← モデルやコードの保存場所
+└── cache         ← モデルのキャッシュ保存用
+```
+
+---
+
+## ✅ Step 2：`docker-compose.yml` ファイルを作る
+
+1. `D:\colab-runtime` フォルダ内に `docker-compose.yml` を新規作成し、以下の内容を保存：
+
+```yaml
+version: "3"
+
+services:
+  colab:
+    image: asia-docker.pkg.dev/colab-images/public/runtime
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    ports:
+      - "127.0.0.1:9000:8080"
+      - "0.0.0.0:7860:7860"
+
+    environment:
+      - JUPYTER_TOKEN=123123123  # 任意のパスワードに変更可
+
+    volumes:
+      - ./content:/content
+      - ./cache:/root/.cache
+```
+
+- ファイル名：`docker-compose.yml`
+- ファイルの種類：すべてのファイル (*.*)
+- 文字コード：UTF-8
+
+---
+
+## ✅ Step 3：Dockerを起動し、Colabランタイムを立ち上げる
+
+🔧 ① Docker Desktopを起動しておく
+
+🖥 ② PowerShell で以下を実行：
+
+```powershell
+cd D:\colab-runtime
+docker-compose up -d
+```
+
+⏳ 初回は自動でDockerイメージをダウンロード（約20〜25GB）
+
+---
+
+## ✅ Step 4：Google Colabからローカルに接続
+
+1. [https://colab.research.google.com](https://colab.research.google.com) にアクセス
+2. 右上の「接続」ボタン →「ローカルランタイムに接続」
+3. 以下のURLを入力：
+
+```
+http://localhost:9000/?token=123123123
+```
+
+※ `token=` の値は、`docker-compose.yml` に設定したものと一致させておく。
+
+---
+
+## ✅ Step 5：GPU動作確認
+
+Colabのコードセルに以下を入力して実行：
+
+```python
+!nvidia-smi
+```
+
+➡️ `RTX 3060` などが表示されればGPU接続成功。
+
+---
+
+## ✅ GradioなどGUIアプリを使うときの注意点
+
+以下のようにコードを修正：
+
+```python
+app.launch(server_name="0.0.0.0")
+```
+
+➡ `http://localhost:7860` にアクセスすればアプリが表示される。
+
+---
+
+## 🔄 次回以降の起動方法
+
+PowerShellで以下を実行：
+
+```powershell
+cd D:\colab-runtime
+docker-compose up -d
+```
+
+その後、Colabから再度：
+
+```
+http://localhost:9000/?token=123123123
+```
+
+に接続。
+
+---
+
+## ✅ 補足
+
+| 項目 | 内容 |
+| -------- | ----------------------------- |
+| コンテナ停止 | `docker-compose down` |
+| データ保存場所 | `D:\colab-runtime\content` |
+| モデルキャッシュ | `D:\colab-runtime\cache` |
+| GPU確認 | `!nvidia-smi` をColabのコードセルで実行 |
+
+---
+
